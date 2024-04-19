@@ -97,7 +97,6 @@ def push_records(host, auth_token, station_type, data_tree, prn=None, prv=None):
 
 def get_charging_stations(host, station_type):
     url = f"{host}/{station_type}?limit=200&offset=0&shownull=false&distinct=true"
-    print(f"\n\ncalling {url}")
     headers = {
         "Content-Type": "application/json"
     }
@@ -106,7 +105,6 @@ def get_charging_stations(host, station_type):
 
 def get_charging_stations_status(host, station_type, from_date, to_date, station_id):
     url = f"{host}/{station_type}/%2A/{from_date}/{to_date}?limit=-1&offset=0&shownull=false&distinct=true&where=sactive.eq.true,scode.in.%28%22{station_id}%22%29&timezone=UTC" #
-    print(f"\n\ncalling {url}")
     headers = {
         "Content-Type": "application/json"
     }
@@ -115,6 +113,23 @@ def get_charging_stations_status(host, station_type, from_date, to_date, station
         return response
     else:
         return []
+    
+def upsert_datatype(host, auth_token, prn, prv, data_type_name, data_type_unit):
+    #3 Sync Data Types
+    data_types = [
+        {
+            "name": data_type_name,
+            "unit": data_type_unit,
+            "rtype": "mean",
+            "description": "charging data",
+            "period": 600,
+            "metadata": {
+                "details": "xxx"
+            }
+        }
+    ]
+
+    return sync_data_types(host, auth_token, data_types, prn, prv)
 
 def upsert_station(host, auth_token, origin, station_type, station_id, station_name, station_lat, station_long, station_elev, station_municipality):
     #4 Sync Stations
@@ -216,8 +231,6 @@ def get_all_charging_stations_names():
         return None
 
 
-
-
 def main():
     read_host = "https://mobility.api.opendatahub.com/v2/flat%2Cnode"
     write_host = "http://localhost:8081"
@@ -240,28 +253,14 @@ def main():
         print_response_details("#2 Create Provenance",response)
 
         provenance_id = response.text
-        #3 Sync Data Types
-        data_types = [
-            {
-                "name": "availability",
-                "unit": "%",
-                "rtype": "mean",
-                "description": "charging data",
-                "period": 600,
-                "metadata": {
-                    "details": "xxx"
-                }
-            }
-        ]
-
-        response = sync_data_types(write_host, auth_token, data_types, prn, prv)
+        response = upsert_datatype(write_host, auth_token, prn, prv, "availability", "%")
         print_response_details("#3 Sync Data Types", response)
         
-        response = upsert_station(write_host, auth_token, origin, station_type, "ASM_00000181", "MORI_01", 46.333, 11.356, 0, "Bolzano")
-        print_response_details("#4 Sync Stations", response)
+        #response = upsert_station(write_host, auth_token, origin, station_type, "ASM_00000181", "MORI_01", 46.333, 11.356, 0, "Bolzano")
+        #print_response_details("#4 Sync Stations", response)
         
-        response = add_station_data(write_host, auth_token, provenance_id, station_type, "ASM_00000181", 1668522653400, "availability", 80)
-        print_response_details("#5 Add data", response)
+        #response = add_station_data(write_host, auth_token, provenance_id, station_type, "ASM_00000181", 1668522653400, "availability", 80)
+        #print_response_details("#5 Add data", response)
         # Navigate to 
         # # http://localhost:8082/flat,node
         # # http://localhost:8082/flat,node/EChargingStation/
@@ -275,8 +274,8 @@ def main():
         availability = get_availability_percentage(read_host, name, 1)
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
         results.append({'scode': name, 'availability': availability, 'timestamp': timestamp})
-        response = add_station_data(write_host, auth_token, provenance_id, station_type, name, 1668522653400, "availability", availability)
-
+        response = add_station_data(write_host, auth_token, provenance_id, station_type, name, datetime.now().microsecond, "availability", availability)
+        print(f"Station {name} available: {availability}%.")
         
     total_percentage = 0
     for result in results:
