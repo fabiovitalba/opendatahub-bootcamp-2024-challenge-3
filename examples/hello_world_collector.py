@@ -125,7 +125,7 @@ def main():
                 "description": "temperature data",
                 "period": 600,
                 "metadata": {
-                    "detials": "xxx"
+                    "details": "xxx"
                 }
             }
         ]
