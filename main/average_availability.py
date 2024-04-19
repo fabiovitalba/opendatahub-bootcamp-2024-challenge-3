@@ -190,22 +190,20 @@ def main():
 
         provenance_id = response.text
         
-    result = []
-    
+    results = []
     names = get_all_charging_stations_names()
-    
-    availabilities = []
-    
-    timestamps = []
-    
+
     for name in names:
         availability = get_availability_percentage(read_host, name, 1)
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-        result.append({'scode': name, 'availability': availability, 'timestamp': timestamp})
-    
+        results.append({'scode': name, 'availability': availability, 'timestamp': timestamp})
         
-    print(f"Availabilities: {result}")
-    
+    total_percentage = 0
+    for result in results:
+        total_percentage += result['availability']  # Corrected accessing 'availability' from each result
+
+    average_availability = total_percentage / len(results)
+    print(f"Average availability: {average_availability}%")
 
 
     #3 Try out the api
