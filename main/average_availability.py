@@ -128,7 +128,7 @@ def get_availability_percentage(host, station_name):
     to_date = end_time.strftime("%Y-%m-%dT%H:%M:%S")
     
     # Call the API to get charging station status
-    response = get_charging_stations_status(read_host, station_type, from_date, to_date, station_name)
+    response = get_charging_stations_status(host, station_type, from_date, to_date, station_name)
     
     if response.status_code == 200:
         data = response.json()['data']
@@ -185,8 +185,8 @@ def main():
         provenance_id = response.text
         
     
-    response = get_all_charging_stations_names(host, station_type)
-    print_response_details("#Get all names",response)
+    response = get_all_charging_stations_names(read_host, station_type)
+   # print_response_details("#Get all names",response)
     
     print(f"\n\nAVAILABILITY: {str(get_availability_percentage(read_host, 'ASM_00000181'))}%")
     
