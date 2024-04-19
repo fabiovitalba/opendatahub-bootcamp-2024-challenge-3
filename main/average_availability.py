@@ -1,4 +1,5 @@
 import requests
+from datetime import datetime, timezone
 
 def print_response_details(current_step, response):
     """Helper function to print the details of the response."""
@@ -96,6 +97,7 @@ def push_records(host, auth_token, station_type, data_tree, prn=None, prv=None):
 
 def get_charging_stations(host, station_type):
     url = f"{host}/{station_type}?limit=200&offset=0&shownull=false&distinct=true"
+    print(f"\n\ncalling {url}")
     headers = {
         "Content-Type": "application/json"
     }
@@ -103,7 +105,8 @@ def get_charging_stations(host, station_type):
     return response
 
 def get_charging_stations_status(host, station_type, from_date, to_date, station_id):
-    url = f"{host}/{station_type}/%2A/{from_date}/{to_date}?limit=200&offset=0&shownull=false&distinct=true&where=scode.in.%28%22{station_id}%22%29&timezone=UTC" #
+    url = f"{host}/{station_type}/%2A/{from_date}/{to_date}?limit=-1&offset=0&shownull=false&distinct=true&where=sactive.eq.true,scode.in.%28%22{station_id}%22%29&timezone=UTC" #
+    print(f"\n\ncalling {url}")
     headers = {
         "Content-Type": "application/json"
     }
@@ -165,47 +168,55 @@ def add_station_data(host, auth_token, provenance_id, station_type, station_id, 
 
 from datetime import datetime, timedelta
 
-def get_availability_percentage(read_host, station_name):
+def get_availability_percentage(host, station_name, last_hours):
     # API info
     station_type = "EChargingStation"
 
     
     # Define the time range for the last hour
-    end_time = datetime.utcnow()
-    start_time = end_time - timedelta(hours=1)
+    end_time = datetime.now(timezone.utc)
+    start_time = end_time - timedelta(hours=last_hours)
     
     # Format the timestamps
     from_date = start_time.strftime("%Y-%m-%dT%H:%M:%S")
     to_date = end_time.strftime("%Y-%m-%dT%H:%M:%S")
     
     # Call the API to get charging station status
-    response = get_charging_stations_status(read_host, station_type, from_date, to_date, station_name)
+    response = get_charging_stations_status(host, station_type, from_date, to_date, station_name)
     
-    data = response['data']
-    print(data)
-    
-    total_entries= 0
-    available_entries = 0
-    
-    for entry in data:
-        total_entries += 1
-        if entry.get('pavailable', True):
-            available_entries += 1
-    
-    if total_entries > 0:
-        availability_percentage = (available_entries / total_entries) * 100
-        return availability_percentage
+    if response.status_code == 200:
+        data = response.json()['data']
+        
+        total_entries= 0
+        available_entries = 0
+        
+        for entry in data:
+            total_entries += 1
+            mvalue = entry.get('mvalue')
+            if mvalue > 0:
+                available_entries += 1
+        
+        if total_entries > 0:
+            availability_percentage = (available_entries / total_entries) * 100
+            return availability_percentage
+        else:
+            return 0  # No data available
     else:
         return 0  # No data available
     
-def get_all_charging_stations_names(host, station_type):
-    response = get_charging_stations(host, station_type)
+def get_all_charging_stations_names():
+    url='https://mobility.api.opendatahub.com/v2/flat/EChargingStation/number-available/latest?select=scode&limit=-1&offset=0&where=sactive.eq.true&shownull=false&distinct=true'
+    response = requests.get(url)
     if response.status_code == 200:
         data = response.json()['data']
+        names = [entry['scode'] for entry in data]
+        return names
     else:
         print(f"Error fetching data for stations names: {response.status_code}")
         return None
-    
+
+
+
 
 def main():
     read_host = "https://mobility.api.opendatahub.com/v2/flat%2Cnode"
@@ -251,8 +262,25 @@ def main():
         
         response = add_station_data(write_host, auth_token, provenance_id, station_type, "ASM_00000181", 1668522653400, "availability", 80)
         print_response_details("#5 Add data", response)
+        # Navigate to 
+        # # http://localhost:8082/flat,node
+        # # http://localhost:8082/flat,node/EChargingStation/
+        # # http://localhost:8082/flat,node/EChargingStation/*/latest
         
+    results = []
+    names = get_all_charging_stations_names()
 
+    for name in names:
+        availability = get_availability_percentage(read_host, name, 1)
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        results.append({'scode': name, 'availability': availability, 'timestamp': timestamp})
+        
+    total_percentage = 0
+    for result in results:
+        total_percentage += result['availability']  # Corrected accessing 'availability' from each result
+
+    average_availability = total_percentage / len(results)
+    print(f"Average availability: {average_availability}%")
 
 if __name__=="__main__":
     main()
