@@ -96,19 +96,14 @@ def push_records(host, auth_token, station_type, data_tree, prn=None, prv=None):
 
 def get_charging_stations(host, station_type):
     url = f"{host}/{station_type}?limit=200&offset=0&shownull=false&distinct=true"
-    print(f"calling {url}")
     headers = {
         "Content-Type": "application/json"
     }
     response = requests.get(url, headers=headers)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        return []
+    return response
 
 def get_charging_stations_status(host, station_type, from_date, to_date, station_id):
     url = f"{host}/{station_type}/%2A/{from_date}/{to_date}?limit=200&offset=0&shownull=false&distinct=true&where=scode.in.%28%22{station_id}%22%29&timezone=UTC" #
-    print(f"calling {url}")
     headers = {
         "Content-Type": "application/json"
     }
@@ -118,9 +113,59 @@ def get_charging_stations_status(host, station_type, from_date, to_date, station
     else:
         return []
 
+def upsert_station(host, auth_token, origin, station_type, station_id, station_name, station_lat, station_long, station_elev, station_municipality):
+    #4 Sync Stations
+    stations_data = [
+        {
+            "id": station_id,
+            "stationType": station_type,
+            "name": station_name,
+            "latitude": station_lat,
+            "longitude": station_long,
+            "elevation": station_elev,
+            "origin": origin,
+            "municipality": station_municipality,
+            "metaData": {
+                "details": "xxx"
+            }
+        }
+    ]
+
+    return sync_stations(host, auth_token, station_type, stations_data)
+
+def add_station_data(host, auth_token, provenance_id, station_type, station_id, measure_timestamp, measure_type, measure_value):
+    #5 Push Record
+    data_tree = {
+        "name": "(default)",
+        "branch": {
+            station_id: {
+                "name": "(default)",
+                "branch": {
+                    measure_type: {
+                        "name": "(default)",
+                        "branch": {},
+                        "data": [
+                            {
+                                "timestamp": measure_timestamp,
+                                "value": measure_value,
+                                "period": 100,
+                                "_t": "it.bz.idm.bdp.dto.SimpleRecordDto"
+                            }
+                        ]
+                    }
+                },
+                "data": []
+            }
+        },
+        "data": [],
+        "provenance": provenance_id
+    }
+
+    return push_records(host, auth_token, station_type, data_tree)
+
 from datetime import datetime, timedelta
 
-def get_availability_percentage(host, station_name):
+def get_availability_percentage(read_host, station_name):
     # API info
     station_type = "EChargingStation"
 
@@ -136,26 +181,22 @@ def get_availability_percentage(host, station_name):
     # Call the API to get charging station status
     response = get_charging_stations_status(read_host, station_type, from_date, to_date, station_name)
     
-    if response.status_code == 200:
-        data = response.json()['data']
-        print(data)
-        
-        total_entries= 0
-        available_entries = 0
-        
-        for entry in data:
-            total_entries += 1
-            if entry.get('pavailable', True):
-                available_entries += 1
-        
-        if total_entries > 0:
-            availability_percentage = (available_entries / total_entries) * 100
-            return availability_percentage
-        else:
-            return 0  # No data available
+    data = response['data']
+    print(data)
+    
+    total_entries= 0
+    available_entries = 0
+    
+    for entry in data:
+        total_entries += 1
+        if entry.get('pavailable', True):
+            available_entries += 1
+    
+    if total_entries > 0:
+        availability_percentage = (available_entries / total_entries) * 100
+        return availability_percentage
     else:
-        print(f"Error fetching data for station {station_name}: {response.status_code}")
-        return None
+        return 0  # No data available
     
 def get_all_charging_stations_names(host, station_type):
     response = get_charging_stations(host, station_type)
@@ -170,91 +211,47 @@ def main():
     read_host = "https://mobility.api.opendatahub.com/v2/flat%2Cnode"
     write_host = "http://localhost:8081"
     station_type = "EChargingStation"
-    origin = "MyCompany"
+    origin = "SlowCharging"
 
     #1 Get the authentication token
     auth_token = get_auth_token()
     
     #2 Create Provenance
     if auth_token:
-        prn = "test"
-        prv = "11111"
+        prn = "SlowCharging"
+        prv = "001"
         uuid = "null"
         data_collector = "TEST"
         data_collector_version = "1.0"
         lineage = origin
 
         response = create_provenance(write_host, auth_token, prn, prv, uuid, data_collector, data_collector_version, lineage)
-
-        #print_response_details("#2 Create Provenance",response)
+        print_response_details("#2 Create Provenance",response)
 
         provenance_id = response.text
-        
-    
-    response = get_all_charging_stations_names(host, station_type)
-    print_response_details("#Get all names",response)
-    
-    print(f"\n\nAVAILABILITY: {str(get_availability_percentage(read_host, 'ASM_00000181'))}%")
-    
-    station_status_log = get_charging_stations_status(read_host,station_type,"2024-04-19T11:00:00","2024-04-19T12:00:00","ASM_00000183")
-    #print_response_details("### Charging Station Log", station_status_log)
-    # station_status_log.data = Station Log
-    # station_status_log.data[0].scode == Station ID
-    # station_status_log.data[0].mvalidtime == Timestamp ("2024-03-19 11:05:49.518+0000")
-    # station_status_log.data[0].sactive: true
-    # station_status_log.data[0].savailable: true
+        #3 Sync Data Types
+        data_types = [
+            {
+                "name": "availability",
+                "unit": "%",
+                "rtype": "mean",
+                "description": "charging data",
+                "period": 600,
+                "metadata": {
+                    "details": "xxx"
+                }
+            }
+        ]
 
-    active_count = 0
-    inactive_count = 0
-    for station_status in station_status_log['data']:
-        if station_status.get('sactive', True):
-            active_count += 1
-        else:
-            inactive_count += 1
-
-    availability_perc = (active_count / (active_count + inactive_count)) * 100
-    print(f"availability percent: {availability_perc}")
-
-    #3 Try out the api
-    # response = requests.get("https://mobility.api.opendatahub.com/v2/flat%2Cnode", headers={'accept': 'application/json'})
-    # if response.status_code == 200:
-    #     json_response = response.json()
-    # else:
-    #     print(f"Error: {response.status_code}")
+        response = sync_data_types(write_host, auth_token, data_types, prn, prv)
+        print_response_details("#3 Sync Data Types", response)
         
+        response = upsert_station(write_host, auth_token, origin, station_type, "ASM_00000181", "MORI_01", 46.333, 11.356, 0, "Bolzano")
+        print_response_details("#4 Sync Stations", response)
         
-    # #4 Get station type:
-    # write_host = "https://mobility.api.opendatahub.com"
-    # endpoint = "/v2/flat%2Cnode/%2A"
-    # params = {
-    #     'limit': -1,
-    #     'offset': 0,
-    #     'shownull': False,
-    #     'distinct': True
-    # }
-    # headers = {'accept': 'application/json'}
-
-    # url = f"{write_host}{endpoint}"
-    # response = requests.get(url, params=params, headers=headers)
-
-    # if response.status_code == 200:
-    #     json_response = response.json()
+        response = add_station_data(write_host, auth_token, provenance_id, station_type, "ASM_00000181", 1668522653400, "availability", 80)
+        print_response_details("#5 Add data", response)
         
-    #     active_count = 0
-    #     inactive_count = 0
-        
-    #     for station in json_response['data']:
-    #         if station.get('pactive', True):
-    #             active_count += 1
-    #         else:
-    #             inactive_count += 1
-        
-    #     print(f"Active Stations: {active_count}")
-    #     print(f"Inactive Stations: {inactive_count}")
-    #     print(f"Total Stations: {active_count+inactive_count}")
-    # else:
-    #     print(f"Error: {response.status_code}")
-    
 
 
 if __name__=="__main__":
