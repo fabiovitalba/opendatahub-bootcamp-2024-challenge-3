@@ -112,6 +112,54 @@ def get_charging_stations_status(host, station_type, from_date, to_date, station
     response = requests.get(url, headers=headers)
     return response
 
+from datetime import datetime, timedelta
+
+def get_availability_percentage(host, station_name):
+    # API info
+    station_type = "EChargingStation"
+
+    
+    # Define the time range for the last hour
+    end_time = datetime.utcnow()
+    start_time = end_time - timedelta(hours=1)
+    
+    # Format the timestamps
+    from_date = start_time.strftime("%Y-%m-%dT%H:%M:%S")
+    to_date = end_time.strftime("%Y-%m-%dT%H:%M:%S")
+    
+    # Call the API to get charging station status
+    response = get_charging_stations_status(read_host, station_type, from_date, to_date, station_name)
+    
+    if response.status_code == 200:
+        data = response.json()['data']
+        print(data)
+        
+        total_entries= 0
+        available_entries = 0
+        
+        for entry in data:
+            total_entries += 1
+            if entry.get('pavailable', True):
+                available_entries += 1
+        
+        if total_entries > 0:
+            availability_percentage = (available_entries / total_entries) * 100
+            return availability_percentage
+        else:
+            return 0  # No data available
+    else:
+        print(f"Error fetching data for station {station_name}: {response.status_code}")
+        return None
+    
+def get_all_charging_stations_names(host, station_type):
+    response = get_charging_stations(host, station_type)
+    if response.status_code == 200:
+        data = response.json()['data']
+    else:
+        print(f"Error fetching data for stations names: {response.status_code}")
+        return None
+    
+
 def main():
     read_host = "https://mobility.api.opendatahub.com/v2/flat%2Cnode"
     write_host = "http://localhost:8081"
@@ -135,9 +183,12 @@ def main():
         #print_response_details("#2 Create Provenance",response)
 
         provenance_id = response.text
+        
     
-    response = get_charging_stations_status(read_host,station_type,"2024-04-19T11:00:00","2024-04-19T12:00:00","ASM_00000183")
-    print_response_details("### Charging Station Log", response)
+    response = get_all_charging_stations_names(host, station_type)
+    print_response_details("#Get all names",response)
+    
+    print(f"\n\nAVAILABILITY: {str(get_availability_percentage(read_host, 'ASM_00000181'))}%")
     
 
 
