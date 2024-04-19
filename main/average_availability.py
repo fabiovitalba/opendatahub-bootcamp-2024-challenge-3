@@ -94,9 +94,28 @@ def push_records(host, auth_token, station_type, data_tree, prn=None, prv=None):
     response = requests.post(url, json=data_tree, headers=headers)
     return response
 
+def get_charging_stations(host, station_type):
+    url = f"{host}/{station_type}?limit=200&offset=0&shownull=false&distinct=true"
+    print(f"calling {url}")
+    headers = {
+        "Content-Type": "application/json"
+    }
+    response = requests.get(url, headers=headers)
+    return response
+
+def get_charging_stations_status(host, station_type, from_date, to_date, station_id):
+    url = f"{host}/{station_type}/%2A/{from_date}/{to_date}?limit=200&offset=0&shownull=false&distinct=true&where=scode.in.%28%22{station_id}%22%29&timezone=UTC" #
+    print(f"calling {url}")
+    headers = {
+        "Content-Type": "application/json"
+    }
+    response = requests.get(url, headers=headers)
+    return response
+
 def main():
-    host = "http://localhost:8081"
-    station_type = "TemperatureSensor"
+    read_host = "https://mobility.api.opendatahub.com/v2/flat%2Cnode"
+    write_host = "http://localhost:8081"
+    station_type = "EChargingStation"
     origin = "MyCompany"
 
     #1 Get the authentication token
@@ -111,53 +130,56 @@ def main():
         data_collector_version = "1.0"
         lineage = origin
 
-        response = create_provenance(host, auth_token, prn, prv, uuid, data_collector, data_collector_version, lineage)
+        response = create_provenance(write_host, auth_token, prn, prv, uuid, data_collector, data_collector_version, lineage)
 
         #print_response_details("#2 Create Provenance",response)
 
         provenance_id = response.text
     
+    response = get_charging_stations_status(read_host,station_type,"2024-04-19T11:00:00","2024-04-19T12:00:00","ASM_00000183")
+    print_response_details("### Charging Station Log", response)
     
+
+
     #3 Try out the api
-    
-    response = requests.get("https://mobility.api.opendatahub.com/v2/flat%2Cnode", headers={'accept': 'application/json'})
-    if response.status_code == 200:
-        json_response = response.json()
-    else:
-        print(f"Error: {response.status_code}")
+    # response = requests.get("https://mobility.api.opendatahub.com/v2/flat%2Cnode", headers={'accept': 'application/json'})
+    # if response.status_code == 200:
+    #     json_response = response.json()
+    # else:
+    #     print(f"Error: {response.status_code}")
         
         
-    #4 Get station type:
-    host = "https://mobility.api.opendatahub.com"
-    endpoint = "/v2/flat%2Cnode/%2A"
-    params = {
-        'limit': -1,
-        'offset': 0,
-        'shownull': False,
-        'distinct': True
-    }
-    headers = {'accept': 'application/json'}
+    # #4 Get station type:
+    # write_host = "https://mobility.api.opendatahub.com"
+    # endpoint = "/v2/flat%2Cnode/%2A"
+    # params = {
+    #     'limit': -1,
+    #     'offset': 0,
+    #     'shownull': False,
+    #     'distinct': True
+    # }
+    # headers = {'accept': 'application/json'}
 
-    url = f"{host}{endpoint}"
-    response = requests.get(url, params=params, headers=headers)
+    # url = f"{write_host}{endpoint}"
+    # response = requests.get(url, params=params, headers=headers)
 
-    if response.status_code == 200:
-        json_response = response.json()
+    # if response.status_code == 200:
+    #     json_response = response.json()
         
-        active_count = 0
-        inactive_count = 0
+    #     active_count = 0
+    #     inactive_count = 0
         
-        for station in json_response['data']:
-            if station.get('pactive', True):
-                active_count += 1
-            else:
-                inactive_count += 1
+    #     for station in json_response['data']:
+    #         if station.get('pactive', True):
+    #             active_count += 1
+    #         else:
+    #             inactive_count += 1
         
-        print(f"Active Stations: {active_count}")
-        print(f"Inactive Stations: {inactive_count}")
-        print(f"Total Stations: {active_count+inactive_count}")
-    else:
-        print(f"Error: {response.status_code}")
+    #     print(f"Active Stations: {active_count}")
+    #     print(f"Inactive Stations: {inactive_count}")
+    #     print(f"Total Stations: {active_count+inactive_count}")
+    # else:
+    #     print(f"Error: {response.status_code}")
     
 
 
