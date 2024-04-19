@@ -101,7 +101,10 @@ def get_charging_stations(host, station_type):
         "Content-Type": "application/json"
     }
     response = requests.get(url, headers=headers)
-    return response
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return []
 
 def get_charging_stations_status(host, station_type, from_date, to_date, station_id):
     url = f"{host}/{station_type}/%2A/{from_date}/{to_date}?limit=200&offset=0&shownull=false&distinct=true&where=scode.in.%28%22{station_id}%22%29&timezone=UTC" #
@@ -110,7 +113,10 @@ def get_charging_stations_status(host, station_type, from_date, to_date, station
         "Content-Type": "application/json"
     }
     response = requests.get(url, headers=headers)
-    return response
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return []
 
 from datetime import datetime, timedelta
 
@@ -190,7 +196,24 @@ def main():
     
     print(f"\n\nAVAILABILITY: {str(get_availability_percentage(read_host, 'ASM_00000181'))}%")
     
+    station_status_log = get_charging_stations_status(read_host,station_type,"2024-04-19T11:00:00","2024-04-19T12:00:00","ASM_00000183")
+    #print_response_details("### Charging Station Log", station_status_log)
+    # station_status_log.data = Station Log
+    # station_status_log.data[0].scode == Station ID
+    # station_status_log.data[0].mvalidtime == Timestamp ("2024-03-19 11:05:49.518+0000")
+    # station_status_log.data[0].sactive: true
+    # station_status_log.data[0].savailable: true
 
+    active_count = 0
+    inactive_count = 0
+    for station_status in station_status_log['data']:
+        if station_status.get('sactive', True):
+            active_count += 1
+        else:
+            inactive_count += 1
+
+    availability_perc = (active_count / (active_count + inactive_count)) * 100
+    print(f"availability percent: {availability_perc}")
 
     #3 Try out the api
     # response = requests.get("https://mobility.api.opendatahub.com/v2/flat%2Cnode", headers={'accept': 'application/json'})
