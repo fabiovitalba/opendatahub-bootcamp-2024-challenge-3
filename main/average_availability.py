@@ -271,9 +271,12 @@ def main():
     names = get_all_charging_stations_names()
 
     for name in names:
+        upsert_station(write_host, auth_token, origin, station_type, name, "MORI_01", 46.333, 11.356, 0, "Bolzano")
         availability = get_availability_percentage(read_host, name, 1)
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
         results.append({'scode': name, 'availability': availability, 'timestamp': timestamp})
+        response = add_station_data(write_host, auth_token, provenance_id, station_type, name, 1668522653400, "availability", availability)
+
         
     total_percentage = 0
     for result in results:
