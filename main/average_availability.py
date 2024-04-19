@@ -1,5 +1,6 @@
 import requests
 from datetime import datetime, timezone
+import time
 
 def print_response_details(current_step, response):
     """Helper function to print the details of the response."""
@@ -274,7 +275,7 @@ def main():
         availability = get_availability_percentage(read_host, name, 1)
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
         results.append({'scode': name, 'availability': availability, 'timestamp': timestamp})
-        response = add_station_data(write_host, auth_token, provenance_id, station_type, name, datetime.now().microsecond, "availability", availability)
+        response = add_station_data(write_host, auth_token, provenance_id, station_type, name, round(time.time() * 1000), "availability", availability)
         print(f"Station {name} available: {availability}%.")
         
     total_percentage = 0
