@@ -112,7 +112,7 @@ def get_charging_stations_status(host, station_type, from_date, to_date, station
     }
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
-        return response.json()
+        return response
     else:
         return []
 
