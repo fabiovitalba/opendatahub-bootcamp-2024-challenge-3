@@ -73,6 +73,14 @@ def sync_stations(host, auth_token, station_type, stations_data, prn=None, prv=N
     response = requests.post(url, json=stations_data, headers=headers)
     return response
 
+def get_charging_stations(host, station_type):
+    url = f"{host}/{station_type}?limit=200&offset=0&shownull=false&distinct=true"
+    headers = {
+        "Content-Type": "application/json"
+    }
+    response = requests.get(url, headers=headers)
+    return response
+
 def sync_data_types(host, auth_token, data_types, prn=None, prv=None):
     """Synchronize (Create / Update) data types information."""
     url = f"{host}/json/syncDataTypes?prn={prn}&prv={prv}"
@@ -95,8 +103,9 @@ def push_records(host, auth_token, station_type, data_tree, prn=None, prv=None):
     return response
 
 def main():
-    host = "http://localhost:8081"
-    station_type = "TemperatureSensor"
+    read_host = "https://mobility.api.opendatahub.com/v2/flat%2Cnode"
+    write_host = "http://localhost:8082"
+    station_type = "EChargingStation"
     origin = "MyCompany"
 
     #1 Get the authentication token
@@ -111,74 +120,9 @@ def main():
         data_collector_version = "1.0"
         lineage = origin
 
-        response = create_provenance(host, auth_token, prn, prv, uuid, data_collector, data_collector_version, lineage)
+        response = get_charging_stations(read_host,station_type)
 
-        print_response_details("#2 Create Provenance",response)
-
-        provenance_id = response.text
-    #3 Sync Data Types
-        data_types = [
-            {
-                "name": "temperature",
-                "unit": "°C",
-                "rtype": "mean",
-                "description": "temperature data",
-                "period": 600,
-                "metadata": {
-                    "details": "xxx"
-                }
-            }
-        ]
-
-        response = sync_data_types(host, auth_token, data_types, prn, prv)
-        print_response_details("#3 Sync Data Types", response)
-
-    #4 Sync Stations
-        stations_data = [
-            {
-                "id": "termperature-station-id-1",
-                "name": "termperature-station-id-1",
-                "origin": origin,
-                "latitude": 46.333,
-                "longitude": 11.356,
-                "municipality": "Bolzano",
-                "metaData": {
-                    "details": "xxx"
-                }
-            }
-        ]
-        response = sync_stations(host, auth_token, station_type, stations_data)
-        print_response_details("#4 Sync Stations",response)
-
-    #5 Push Record
-        data_tree = {
-            "name": "(default)",
-            "branch": {
-                "termperature-station-id-1": {
-                    "name": "(default)",
-                    "branch": {
-                        "temperature": {
-                            "name": "(default)",
-                            "branch": {},
-                            "data": [
-                                {
-                                    "timestamp": 1668522653400,
-                                    "value": 1234,
-                                    "period": 100,
-                                    "_t": "it.bz.idm.bdp.dto.SimpleRecordDto"
-                                }
-                            ]
-                        }
-                    },
-                    "data": []
-                }
-            },
-            "data": [],
-            "provenance": provenance_id
-        }
-
-        response = push_records(host, auth_token, station_type, data_tree)
-        print_response_details("#5 push records", response)
+        print_response_details("#2 Charging Stations",response)
 
 if __name__=="__main__":
     main()
